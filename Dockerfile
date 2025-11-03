@@ -1,11 +1,24 @@
-# Use the official Nginx base image
-FROM nginx:alpine
+# Use Node.js LTS version
+FROM node:18-alpine
 
-# Copy the HTML file into Nginx's default html directory
-COPY index.html /usr/share/nginx/html/index.html
+# Set working directory
+WORKDIR /app
 
-# Expose port 80 for web traffic
-EXPOSE 80
+# Copy package files
+COPY package*.json ./
 
-# Start Nginx when the container runs
-CMD ["nginx", "-g", "daemon off;"]
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start application
+CMD ["npm", "start"]

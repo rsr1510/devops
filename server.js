@@ -234,7 +234,7 @@ app.get('/', (req, res) => {
             </svg>
         </div>
 
-        <h1>Hello from Rohit! 👋</h1>
+        <h1>Hello from RS! 👋</h1>
         <p class="subtitle">
             <span class="status-badge">
                 <span class="pulse"></span>

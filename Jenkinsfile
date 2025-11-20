@@ -332,67 +332,46 @@ pipeline {
                     ),
                     [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-id']
                 ]) {
-                    script {
-                        sh '''
-                            echo "🚀 Deploying to EC2..."
-                            
-                            # Get AWS Account ID on Jenkins server
-                            AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-                            ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                            
-                            cat > deploy.sh <<EOF
+                    sh '''
+                        echo "🚀 Deploying to EC2..."
+                        
+                        cat > deploy.sh <<EOF
 #!/bin/bash
-set -ex
+set -e
 
-# Export AWS credentials
-export AWS_REGION="${AWS_REGION}"
+export AWS_REGION="ap-south-2"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
-export AWS_DEFAULT_REGION="${AWS_REGION}"
 
-# Login to ECR
-echo "Logging into ECR..."
+AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+ECR_REGISTRY="\${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
 aws ecr get-login-password --region ${AWS_REGION} | \\
-    docker login --username AWS --password-stdin ${ECR_REGISTRY}
+    docker login --username AWS --password-stdin \${ECR_REGISTRY} > /dev/null 2>&1
 
-# Stop and remove old container
-echo "Stopping old container..."
 docker stop ${APP_NAME} 2>/dev/null || true
 docker rm ${APP_NAME} 2>/dev/null || true
 
-# Pull new image
-echo "Pulling image ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}..."
-docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+echo "Pulling image..."
+docker pull \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
-# Start new container
 echo "Starting container..."
 docker run -d --name ${APP_NAME} --restart unless-stopped \\
-    -p 80:3000 ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+    -p 80:3000 \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
-# Health check
-echo "Waiting for health check..."
 sleep 5
-if curl -sf http://localhost/health > /dev/null; then
-    echo "✅ Container is healthy"
-else
-    echo "❌ Health check failed"
-    docker logs ${APP_NAME} --tail 50
-    exit 1
-fi
+curl -sf http://localhost/health > /dev/null || exit 1
+echo "Container is healthy"
 EOF
-                        '''
+                    '''
+
+                    sh '''
+                        chmod 600 $SSH_KEY
+                        scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -i $SSH_KEY deploy.sh ec2-user@$EC2_HOST:/tmp/deploy.sh
+                        ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -i $SSH_KEY ec2-user@$EC2_HOST 'bash /tmp/deploy.sh'
                         
-                        sh '''
-                            chmod 600 $SSH_KEY
-                            echo "Copying deploy script to EC2..."
-                            scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -i $SSH_KEY deploy.sh ec2-user@$EC2_HOST:/tmp/deploy.sh
-                            
-                            echo "Executing deployment on EC2..."
-                            ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -i $SSH_KEY ec2-user@$EC2_HOST 'bash -x /tmp/deploy.sh'
-                            
-                            echo "✅ Deployment completed successfully"
-                        '''
-                    }
+                        echo "✅ Deployment completed"
+                    '''
                 }
             }
         }

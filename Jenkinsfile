@@ -32,13 +32,15 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                echo '📦 Installing Node.js dependencies...'
+                echo "📦 Installing Node.js dependencies..."
                 sh '''
+                    npm cache clean --force
+                    rm -rf ~/.npm/_cacache
                     npm ci
-                    npm list || true
                 '''
             }
         }
+
 
         stage('Lint & Test') {
             parallel {

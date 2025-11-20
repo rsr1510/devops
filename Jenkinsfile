@@ -33,13 +33,23 @@ pipeline {
         }
         
         stage('Install Dependencies') {
-            steps {
-                script {
-                    echo '==================== Installing Dependencies ===================='
-                    sh 'npm install'
-                }
-            }
+    steps {
+        script {
+            echo '==================== Installing Dependencies ===================='
+            sh '''
+                echo "Cleaning npm cache..."
+                npm cache clean --force
+
+                echo "Removing node_modules and lock file..."
+                rm -rf node_modules package-lock.json
+
+                echo "Installing clean dependencies..."
+                npm install --prefer-online --force
+            '''
         }
+    }
+}
+
 
         stage('Code Quality Analysis') {
             steps {

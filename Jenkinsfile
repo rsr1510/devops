@@ -124,43 +124,22 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'ec2-host', variable: 'EC2_HOST'),
-                    [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-id']
+                    string(credentialsId: 'ec2-host', variable: 'EC2_HOST')
                 ]) {
-                    sshagent(['ec2-host']) {
-        
-                        sh '''
-                            cat > deploy.sh <<'EOF'
-        #!/bin/bash
-        set -e
-        
-        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        
-        aws ecr get-login-password --region ${AWS_REGION} \
-            | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-        
-        docker stop ${APP_NAME} || true
-        docker rm ${APP_NAME} || true
-        
-        docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-        
-        docker run -d --name ${APP_NAME} --restart unless-stopped \
-            -p 80:3000 ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-        
-        sleep 5
-        curl -f http://localhost/health || exit 1
-        EOF
-                        '''
-        
-                        sh '''
-                            scp -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_HOST:/tmp/deploy.sh
-                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST 'bash /tmp/deploy.sh'
-                        '''
+                    sshagent(['ec2-ssh-key']) {
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ubuntu@${EC2_HOST} << 'EOF'
+                        docker pull ${ECR_REGISTRY}/rs-app:${BUILD_NUMBER}
+                        docker stop rs-app || true
+                        docker rm rs-app || true
+                        docker run -d -p 3000:3000 --name rs-app ${ECR_REGISTRY}/rs-app:${BUILD_NUMBER}
+                        EOF
+                        """
                     }
                 }
             }
         }
+
 
         stage('Smoke Test') {
             steps {

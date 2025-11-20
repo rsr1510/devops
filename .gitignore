@@ -1,0 +1,66 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories
+jspm_packages/
+
+# Logs
+logs/
+*.log
+logs/*.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+lib-cov
+coverage/
+.nyc_output/
+
+# Jest
+jest-cache/
+jest-html-reporters-*/ 
+jest-coverage/
+
+# Build output
+dist/
+build/
+tmp/
+temp/
+
+# Optional npm cache directory
+.npm/
+
+# dotenv environment variable files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Jenkins workspace leftovers
+@tmp/
+workspace/
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Node REPL history
+.node_repl_history
+
+# Misc
+coverage-final.json

@@ -95,35 +95,28 @@ pipeline {
         stage('Push to ECR') {
             steps {
                 script {
-                    withCredentials([
-                        usernamePassword(credentialsId: 'aws-credentials-id',
-                                         usernameVariable: 'AWS_ACCESS_KEY_ID',
-                                         passwordVariable: 'AWS_SECRET_ACCESS_KEY')
-                    ]) {
-
+                    withCredentials([[
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-credentials-id',
+                        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ]]) {
                         sh """
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                             export AWS_REGION=${AWS_REGION}
-
+                            
                             AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
                             ECR_REGISTRY=\${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-                            aws ecr describe-repositories --repository-names ${ECR_REPOSITORY} >/dev/null 2>&1 || \
-                                aws ecr create-repository --repository-name ${ECR_REPOSITORY}
-
-                            aws ecr get-login-password --region ${AWS_REGION} \
-                                | docker login --username AWS --password-stdin \${ECR_REGISTRY}
-
+                    
+                            aws ecr get-login-password --region ${AWS_REGION} |
+                                docker login --username AWS --password-stdin \${ECR_REGISTRY}
+                    
                             docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-                            docker tag ${ECR_REPOSITORY}:latest \${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
-
                             docker push \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
-                            docker push \${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
-
-                            echo "ECR_REGISTRY=\${ECR_REGISTRY}" > ecr_info.txt
                         """
                     }
+
                 }
             }
         }

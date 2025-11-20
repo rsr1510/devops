@@ -3,90 +3,104 @@ pipeline {
     
     environment {
         // AWS Configuration
-        AWS_ACCOUNT_ID = '666098475707'
         AWS_REGION = 'us-east-1'
-        ECR_REPOSITORY = 'rohit'
-        
-        // Docker Configuration
-        DOCKER_IMAGE = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REPOSITORY = 'devops-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
         
-        // Deployment Configuration
-        EC2_HOST = 'ec2-13-216-216-225.compute-1.amazonaws.com'
+        // Application Configuration
+        APP_NAME = 'devops-app'
+        EC2_HOST = credentials('ec2-host')
         EC2_USER = 'ec2-user'
         
-        // AWS Credentials (configured in Jenkins)
-        AWS_CREDENTIALS = 'aws-credentials-id'
-        
-        // Email Configuration
-        EMAIL_RECIPIENTS = 'your-email@example.com'
+        // Notification
+        EMAIL_RECIPIENTS = 'r.s.r94448@gmail.com'
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
     }
     
     stages {
         stage('Checkout') {
             steps {
                 script {
-                    echo '==================== Checking out code from GitHub ===================='
+                    echo '📥 Checking out code from GitHub...'
                     checkout scm
+                    
+                    // Get commit information
+                    env.GIT_COMMIT_MSG = sh(
+                        script: 'git log -1 --pretty=%B',
+                        returnStdout: true
+                    ).trim()
+                    env.GIT_AUTHOR = sh(
+                        script: 'git log -1 --pretty=%an',
+                        returnStdout: true
+                    ).trim()
                 }
             }
         }
         
-        stage('Build') {
+        stage('Install Dependencies') {
             steps {
                 script {
-                    echo '==================== Building the Application ===================='
-                    // For Node.js application
+                    echo '📦 Installing Node.js dependencies...'
                     sh '''
-                        npm install
+                        npm ci
+                        npm list
                     '''
-                    
-                    // For Maven/Java application, use:
-                    // sh 'mvn clean package'
-                    
-                    // For Python application, use:
-                    // sh 'pip install -r requirements.txt'
                 }
             }
         }
         
-        stage('Test') {
+        stage('Code Quality - Lint') {
             steps {
                 script {
-                    echo '==================== Running Tests ===================='
-                    // For Node.js
-                    sh 'npm test || true'
-                    
-                    // For Maven/Java, use:
-                    // sh 'mvn test'
-                    
-                    // For Python, use:
-                    // sh 'pytest tests/'
+                    echo '🔍 Running ESLint...'
+                    sh 'npm run lint || true'
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            steps {
+                script {
+                    echo '🧪 Running unit tests...'
+                    sh '''
+                        npm test -- --coverage --ci
+                    '''
                 }
             }
             post {
                 always {
-                    // Publish test results if they exist
-                    script {
-                        if (fileExists('/test-results/*.xml')) {
-                            junit '/test-results/*.xml'
-                        } else {
-                            echo 'No test results found'
-                        }
-                    }
+                    // Archive test results
+                    junit(
+                        testResults: '**/junit.xml',
+                        allowEmptyResults: true
+                    )
                 }
             }
         }
         
-        stage('Code Quality Analysis') {
+        stage('SonarQube Analysis') {
+            when {
+                branch 'main'
+            }
             steps {
                 script {
-                    echo '==================== Running Code Quality Checks ===================='
-                    // Example: ESLint for Node.js
-                    sh 'npm run lint || true'
-                    
-                    // For SonarQube analysis (optional)
-                    // sh 'sonar-scanner'
+                    echo '📊 Running SonarQube analysis...'
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                            sonar-scanner \
+                                -Dsonar.projectKey=devops-app \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=$SONAR_HOST_URL \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        '''
+                    }
                 }
             }
         }
@@ -94,11 +108,22 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo '==================== Building Docker Image ===================='
+                    echo '🐳 Building Docker image...'
                     sh """
-                        docker build -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
-                        docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${DOCKER_IMAGE}:${IMAGE_TAG}
-                        docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${DOCKER_IMAGE}:latest
+                        docker build \
+                            -t ${ECR_REPOSITORY}:${IMAGE_TAG} \
+                            -t ${ECR_REPOSITORY}:latest \
+                            --build-arg BUILD_DATE=\$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+                            --build-arg VCS_REF=\$(git rev-parse --short HEAD) \
+                            .
+                    """
+                    
+                    // Scan image for vulnerabilities (optional)
+                    sh """
+                        docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            aquasec/trivy image --severity HIGH,CRITICAL \
+                            ${ECR_REPOSITORY}:${IMAGE_TAG} || true
                     """
                 }
             }
@@ -107,16 +132,24 @@ pipeline {
         stage('Push to ECR') {
             steps {
                 script {
-                    echo '==================== Pushing Image to AWS ECR ===================='
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
-                                    credentialsId: "${AWS_CREDENTIALS}"]]) {
+                    echo '📤 Pushing image to AWS ECR...'
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
                         sh """
                             # Login to ECR
-                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                                docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                            
+                            # Tag images
+                            docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} \
+                                ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                            docker tag ${ECR_REPOSITORY}:latest \
+                                ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
                             
                             # Push images
-                            docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
-                            docker push ${DOCKER_IMAGE}:latest
+                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                            docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+                            
+                            echo "✅ Image pushed: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
                         """
                     }
                 }
@@ -126,41 +159,75 @@ pipeline {
         stage('Deploy to EC2') {
             steps {
                 script {
-                    echo '==================== Deploying to EC2 Instance ===================='
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
-                                    credentialsId: "${AWS_CREDENTIALS}"],
-                                   sshUserPrivateKey(credentialsId: 'ec2-ssh-key', 
-                                                    keyFileVariable: 'SSH_KEY')]) {
-                        sh """
-                            # SSH into EC2 and deploy
-                            ssh -o StrictHostKeyChecking=no -i \$SSH_KEY ${EC2_USER}@${EC2_HOST} << 'EOF'
-                                # Login to ECR
-                                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                                
-                                # Stop and remove old container
-                                docker stop my-web-app || true
-                                docker rm my-web-app || true
-                                
-                                # Pull and run new container
-                                docker pull ${DOCKER_IMAGE}:${IMAGE_TAG}
-                                docker run -d --name my-web-app -p 80:3000 ${DOCKER_IMAGE}:${IMAGE_TAG}
-                                
-                                # Clean up old images
-                                docker image prune -f
-EOF
-                        """
+                    echo '🚀 Deploying to EC2...'
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                        sshagent(['ec2-ssh-key']) {
+                            sh """
+                                # Create deployment script
+                                cat > deploy.sh << 'EOFSCRIPT'
+#!/bin/bash
+set -e
+
+# Login to ECR
+aws ecr get-login-password --region ${AWS_REGION} | \\
+    docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+# Stop and remove old container
+docker stop ${APP_NAME} || true
+docker rm ${APP_NAME} || true
+
+# Pull new image
+docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+
+# Run new container
+docker run -d \\
+    --name ${APP_NAME} \\
+    --restart unless-stopped \\
+    -p 80:3000 \\
+    -e NODE_ENV=production \\
+    --log-driver=awslogs \\
+    --log-opt awslogs-region=${AWS_REGION} \\
+    --log-opt awslogs-group=/ecs/${APP_NAME} \\
+    --log-opt awslogs-stream=\$(hostname) \\
+    ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+
+# Health check
+echo "Waiting for application to start..."
+sleep 10
+curl -f http://localhost/health || exit 1
+
+echo "✅ Deployment successful!"
+EOFSCRIPT
+
+                                # Copy and execute deployment script
+                                scp -o StrictHostKeyChecking=no deploy.sh ${EC2_USER}@${EC2_HOST}:/tmp/
+                                ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'bash /tmp/deploy.sh'
+                            """
+                        }
                     }
                 }
             }
         }
         
-        stage('Health Check') {
+        stage('Smoke Tests') {
             steps {
                 script {
-                    echo '==================== Performing Health Check ===================='
+                    echo '🔥 Running smoke tests...'
+                    sleep(time: 15, unit: 'SECONDS')
+                    
                     sh """
-                        sleep 10
+                        # Test application health
+                        HTTP_CODE=\$(curl -s -o /dev/null -w "%{http_code}" http://${EC2_HOST}/health)
+                        if [ \$HTTP_CODE -eq 200 ]; then
+                            echo "✅ Health check passed"
+                        else
+                            echo "❌ Health check failed with code \$HTTP_CODE"
+                            exit 1
+                        fi
+                        
+                        # Test main endpoint
                         curl -f http://${EC2_HOST}/ || exit 1
+                        echo "✅ Application is responding correctly"
                     """
                 }
             }
@@ -169,42 +236,71 @@ EOF
     
     post {
         success {
-            echo '==================== Pipeline Succeeded ===================='
-            emailext (
-                subject: "✅ Jenkins Pipeline Success: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: """
-                    <h2>Build Success!</h2>
-                    <p><strong>Job:</strong> ${env.JOB_NAME}</p>
-                    <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
-                    <p><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                    <p><strong>Docker Image:</strong> ${DOCKER_IMAGE}:${IMAGE_TAG}</p>
-                    <p><strong>Deployment URL:</strong> <a href="http://${EC2_HOST}">http://${EC2_HOST}</a></p>
-                    <p>The application has been successfully deployed to AWS.</p>
-                """,
-                to: "${EMAIL_RECIPIENTS}",
-                mimeType: 'text/html'
-            )
+            script {
+                def message = """
+                    ✅ Pipeline SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}
+                    
+                    📋 Details:
+                    - Branch: ${env.BRANCH_NAME}
+                    - Commit: ${env.GIT_COMMIT_MSG}
+                    - Author: ${env.GIT_AUTHOR}
+                    - Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                    - Deployed to: http://${EC2_HOST}
+                    
+                    🔗 Build URL: ${env.BUILD_URL}
+                """
+                
+                emailext(
+                    subject: "✅ Pipeline Success - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: message,
+                    to: "${EMAIL_RECIPIENTS}",
+                    mimeType: 'text/plain'
+                )
+                
+                echo message
+            }
+            
+            // Clean up Docker images
+            sh '''
+                docker image prune -f
+            '''
         }
         
         failure {
-            echo '==================== Pipeline Failed ===================='
-            emailext (
-                subject: "❌ Jenkins Pipeline Failed: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: """
-                    <h2>Build Failed!</h2>
-                    <p><strong>Job:</strong> ${env.JOB_NAME}</p>
-                    <p><strong>Build Number:</strong> ${env.BUILD_NUMBER}</p>
-                    <p><strong>Build URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                    <p><strong>Console Output:</strong> <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></p>
-                    <p>Please check the console output for details.</p>
-                """,
-                to: "${EMAIL_RECIPIENTS}",
-                mimeType: 'text/html'
-            )
+            script {
+                def message = """
+                    ❌ Pipeline FAILED - ${env.JOB_NAME} #${env.BUILD_NUMBER}
+                    
+                    📋 Details:
+                    - Branch: ${env.BRANCH_NAME}
+                    - Commit: ${env.GIT_COMMIT_MSG}
+                    - Author: ${env.GIT_AUTHOR}
+                    - Failed Stage: ${env.STAGE_NAME}
+                    
+                    🔗 Build URL: ${env.BUILD_URL}
+                    
+                    Please check the logs for more details.
+                """
+                
+                emailext(
+                    subject: "❌ Pipeline Failed - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: message,
+                    to: "${EMAIL_RECIPIENTS}",
+                    mimeType: 'text/plain'
+                )
+                
+                echo message
+            }
         }
         
         always {
-            // Clean up workspace
+            // Archive artifacts
+            archiveArtifacts(
+                artifacts: '**/package*.json, Dockerfile',
+                allowEmptyArchive: true
+            )
+            
+            // Clean workspace
             cleanWs()
         }
     }

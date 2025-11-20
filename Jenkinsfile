@@ -127,7 +127,7 @@ pipeline {
                     string(credentialsId: 'ec2-host', variable: 'EC2_HOST'),
                     [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-id']
                 ]) {
-                    sshagent(['ec2-user']) {
+                    sshagent(['ec2-host']) {
         
                         sh '''
                             cat > deploy.sh <<'EOF'

@@ -2,18 +2,19 @@ pipeline {
     agent any
     
     environment {
-        // AWS Configuration
-        AWS_REGION = 'us-east-1'
-        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        AWS_REGION = 'ap-south-2'
+        AWS_CREDENTIALS = credentials('aws-credentials-id')   // Access Key + Secret Key
+        AWS_ACCOUNT_ID = "${AWS_CREDENTIALS_USR}"             // Access Key ID part
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        ECR_REPOSITORY = 'devops-app'
+        ECR_REPOSITORY = 'rs-app'
         IMAGE_TAG = "${BUILD_NUMBER}"
-        
-        // Application Configuration
-        APP_NAME = 'devops-app'
-        EC2_HOST = credentials('ec2-host')
+    
+        // Application / Deployment Configuration
+        APP_NAME = 'rs-app'
+    
+        EC2_HOST = credentials('ec2-host')   // This contains your EC2 public DNS/IP
         EC2_USER = 'ec2-user'
-        
+        SSH_KEY = credentials('ec2-ssh-key') // SSH private key for EC2 deployment        
         // Notification
         EMAIL_RECIPIENTS = 'r.s.r94448@gmail.com'
     }

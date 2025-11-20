@@ -22,19 +22,21 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
-    stages {
         stage('Checkout') {
-            steps {
-                // node/workspace context ensured by declarative agent
-                echo '📥 Checking out code from GitHub...'
-                checkout scm
-
-                script {
-                    env.GIT_COMMIT_MSG = sh(script: 'git log -1 --pretty=%B', returnStdout: true).trim()
-                    env.GIT_AUTHOR     = sh(script: 'git log -1 --pretty=%an', returnStdout: true).trim()
-                }
+            echo "📥 Checking out code from GitHub..."
+            checkout scm
+        
+            // FIX GIT DUBIOUS OWNERSHIP ERROR
+            sh '''
+                git config --global --add safe.directory /var/lib/jenkins/workspace/my-web-app-pipeline
+            '''
+        
+            script {
+                env.COMMIT_MESSAGE = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                env.AUTHOR = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
             }
         }
+
 
         stage('Install Dependencies') {
             steps {

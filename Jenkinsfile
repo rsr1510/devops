@@ -335,25 +335,29 @@ pipeline {
                     sh '''
                         echo "🚀 Deploying to EC2..."
                         
-                        cat > deploy.sh <<'EOF'
+                        cat > deploy.sh <<EOF
 #!/bin/bash
 set -e
 
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+export AWS_REGION="${AWS_REGION}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
 
-aws ecr get-login-password --region ${AWS_REGION} | \
-    docker login --username AWS --password-stdin ${ECR_REGISTRY} > /dev/null 2>&1
+AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
+ECR_REGISTRY="\${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+aws ecr get-login-password --region ${AWS_REGION} | \\
+    docker login --username AWS --password-stdin \${ECR_REGISTRY} > /dev/null 2>&1
 
 docker stop ${APP_NAME} 2>/dev/null || true
 docker rm ${APP_NAME} 2>/dev/null || true
 
 echo "Pulling image..."
-docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+docker pull \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
 echo "Starting container..."
-docker run -d --name ${APP_NAME} --restart unless-stopped \
-    -p 80:3000 ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+docker run -d --name ${APP_NAME} --restart unless-stopped \\
+    -p 80:3000 \${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
 sleep 5
 curl -sf http://localhost/health > /dev/null || exit 1
@@ -416,4 +420,3 @@ EOF
         }
     }
 }
-

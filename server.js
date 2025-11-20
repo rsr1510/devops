@@ -1,9 +1,8 @@
 const express = require("express");
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve modern sleek inline-CSS HTML
+// Serve classy raw-finish HTML
 app.get("/", (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -12,75 +11,75 @@ app.get("/", (req, res) => {
         <title>Raghav's App</title>
         <meta charset="UTF-8" />
         <style>
+            /* Global Styles */
             body {
                 margin: 0;
                 height: 100vh;
-                background: #000;
-                font-family: 'Segoe UI', Arial, sans-serif;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                color: #fff;
-                overflow: hidden;
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                background-color: #f5f5f5;
+                color: #333;
             }
 
+            /* Card Styles */
             .card {
-                background: rgba(255,255,255,0.05);
-                border: 1px solid rgba(255,255,255,0.1);
-                padding: 40px 60px;
-                border-radius: 16px;
-                backdrop-filter: blur(12px);
-                box-shadow: 0 0 25px rgba(0, 140, 255, 0.2);
+                background: #fff;
+                border: 1px solid #ddd;
+                padding: 50px 70px;
+                border-radius: 12px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
                 text-align: center;
-                animation: fadeIn 1.2s ease-in-out;
+                max-width: 500px;
             }
 
             h1 {
-                font-size: 2.8rem;
+                font-size: 2.5rem;
                 margin-bottom: 10px;
-                color: #0abaff;
-                letter-spacing: 1px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
             }
 
             h2 {
-                font-weight: 300;
-                font-size: 1.3rem;
-                color: #ddd;
-                margin-bottom: 25px;
+                font-weight: 400;
+                font-size: 1.2rem;
+                color: #666;
+                margin-bottom: 20px;
             }
 
             p {
-                color: #aaa;
                 font-size: 1rem;
-                line-height: 1.6rem;
-            }
-
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(20px); }
-                to   { opacity: 1; transform: translateY(0); }
-            }
-
-            .glow {
-                text-shadow: 0 0 8px #0abaff, 0 0 25px #0abaff;
+                line-height: 1.6;
+                color: #555;
             }
 
             .footer {
                 margin-top: 25px;
-                font-size: 0.9rem;
-                color: #666;
+                font-size: 0.85rem;
+                color: #999;
+            }
+
+            /* Subtle fade-in */
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(15px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            .card {
+                animation: fadeIn 1s ease-in-out;
             }
         </style>
     </head>
-
     <body>
         <div class="card">
-            <h1 class="glow">Welcome to Raghav's Cloud App</h1>
-            <h2> CI/CD Deployment Successful</h2>
+            <h1>Rohit RS</h1>
+            <h2>Minimal & Classy Web Presence</h2>
             <p>
-                Your application is now live on AWS.<br>
-                Delivered through a modern, sleek, production-grade pipeline.
+                A refined, raw-finish design that’s clean, professional, and timeless.  
+                Perfect for modern cloud apps and portfolios.
             </p>
-            <div class="footer">Powered by AWS • Jenkins • Docker • ECR • ECS</div>
+            <div class="footer">Powered by Simplicity • Elegance • Code</div>
         </div>
     </body>
     </html>
@@ -89,7 +88,7 @@ app.get("/", (req, res) => {
 
 // Health Check
 app.get("/health", (req, res) => {
-    res.json({ status: "healthy", message: "Modern app running successfully" });
+    res.json({ status: "healthy", message: "Classy raw app running successfully" });
 });
 
 app.listen(PORT, () => {

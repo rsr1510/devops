@@ -123,58 +123,40 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'ec2-host', variable: 'EC2_HOST')]) {
-
-                        sshagent(['ec2-ssh-key']) {
-
-                            withCredentials([
-                                usernamePassword(credentialsId: 'aws-credentials-id',
-                                                 usernameVariable: 'AWS_ACCESS_KEY_ID',
-                                                 passwordVariable: 'AWS_SECRET_ACCESS_KEY')
-                            ]) {
-
-                                sh """
-                                    cat > deploy.sh <<'EOF'
-#!/bin/bash
-set -e
-
-export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-export AWS_REGION=${AWS_REGION}
-
-AWS_ACCOUNT_ID=\$(aws sts get-caller-identity --query Account --output text)
-ECR_REGISTRY=\${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-APP_NAME=${APP_NAME}
-IMAGE_TAG=${IMAGE_TAG}
-ECR_REPOSITORY=${ECR_REPOSITORY}
-
-aws ecr get-login-password --region ${AWS_REGION} \
-    | docker login --username AWS --password-stdin \${ECR_REGISTRY}
-
-docker stop \${APP_NAME} || true
-docker rm \${APP_NAME} || true
-
-docker pull \${ECR_REGISTRY}/\${ECR_REPOSITORY}:\${IMAGE_TAG}
-
-docker run -d --name \${APP_NAME} \
-    --restart unless-stopped \
-    -p 80:3000 \
-    -e NODE_ENV=production \
-    \${ECR_REGISTRY}/\${ECR_REPOSITORY}:\${IMAGE_TAG}
-
-sleep 5
-curl -f http://localhost/health || exit 1
-
-echo "Deployment OK"
-EOF
-
-                                    scp -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_HOST:/tmp/deploy.sh
-                                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST 'bash /tmp/deploy.sh'
-                                """
-                            }
-                        }
+                withCredentials([
+                    string(credentialsId: 'ec2-host', variable: 'EC2_HOST'),
+                    [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-id']
+                ]) {
+                    sshagent(['ec2-ssh-key']) {
+        
+                        sh '''
+                            cat > deploy.sh <<'EOF'
+        #!/bin/bash
+        set -e
+        
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        
+        aws ecr get-login-password --region ${AWS_REGION} \
+            | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+        
+        docker stop ${APP_NAME} || true
+        docker rm ${APP_NAME} || true
+        
+        docker pull ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+        
+        docker run -d --name ${APP_NAME} --restart unless-stopped \
+            -p 80:3000 ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+        
+        sleep 5
+        curl -f http://localhost/health || exit 1
+        EOF
+                        '''
+        
+                        sh '''
+                            scp -o StrictHostKeyChecking=no deploy.sh ubuntu@$EC2_HOST:/tmp/deploy.sh
+                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST 'bash /tmp/deploy.sh'
+                        '''
                     }
                 }
             }

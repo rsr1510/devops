@@ -38,12 +38,12 @@ pipeline {
             steps {
                 echo "📦 Installing Node dependencies..."
                 sh '''
-                    npm cache clean --force
-                    rm -rf ~/.npm/_cacache
-                    npm ci
+                    rm -rf node_modules package-lock.json
+                    npm install --legacy-peer-deps
                 '''
             }
         }
+
 
         stage('Lint & Test') {
             parallel {

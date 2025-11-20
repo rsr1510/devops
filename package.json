@@ -1,18 +1,12 @@
 {
-  "name": "my-web-app",
+  "name": "raghav-ci-cd-app",
   "version": "1.0.0",
-  "description": "Sample web application for CI/CD",
+  "description": "Simple CI/CD demo app for Raghav Ganesan",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "jest",
-    "lint": "eslint ."
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "jest": "^29.5.0",
-    "eslint": "^8.40.0"
+    "express": "^4.19.2"
   }
 }

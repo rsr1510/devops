@@ -8,7 +8,7 @@ app.get("/", (req, res) => {
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <title>Raghav's App</title>
+        <title>RS Rohit</title>
         <meta charset="UTF-8" />
         <style>
             /* Global Styles */
@@ -73,7 +73,7 @@ app.get("/", (req, res) => {
     </head>
     <body>
         <div class="card">
-            <h1>Rohit RS</h1>
+            <h1>RS Rohit</h1>
             <h2>Minimal & Classy Web Presence</h2>
             <p>
                 A refined, raw-finish design that’s clean, professional, and timeless.  

@@ -12,7 +12,7 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
         
         // Deployment Configuration
-        EC2_HOST = 'ec2-18-60-109-216.ap-south-2.compute.amazonaws.com'  // Replace with your EC2 public DNS
+        EC2_HOST = 'ec2-18-60-129-148.ap-south-2.compute.amazonaws.com'  // Replace with your EC2 public DNS
         EC2_USER = 'ec2-user'
         
         // AWS Credentials (configured in Jenkins)
